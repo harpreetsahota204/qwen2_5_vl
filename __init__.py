@@ -5,7 +5,7 @@ from huggingface_hub import snapshot_download
 from fiftyone.operators import types
 
 # Import constants from zoo.py to ensure consistency
-from .zoo import SYSTEM_PROMPTS, QwenModel
+from .zoo import QWEN_OPERATIONS, QwenModel
 
 logger = logging.getLogger(__name__)
 
@@ -67,90 +67,29 @@ def resolve_input(model_name, ctx):
     # Operation selection
     inputs.enum(
         "operation",
-        values=list(SYSTEM_PROMPTS.keys()),
+        values=list(QWEN_OPERATIONS.keys()),
         default=None,
         required=True,
         label="Operation",
-        description="Type of task to perform with Florence2 model",
-        view=types.AutocompleteView()
-    )
-    
-    # Caption detail level
-    inputs.enum(
-        "detail_level",
-        values=["basic", "detailed", "more_detailed"],
-        default=None,
-        required=False,
-        label="Caption detail level",
-        description="Level of detail in generated captions",
-        view=types.AutocompleteView(),
-    )
-    
-    # OCR parameters
-    inputs.bool(
-        "store_region_info",
-        default=None,
-        required=False,
-        label="Store region information",
-        description="Whether to include text region bounding boxes",
-        view=types.AutocompleteView()
-    )
-    
-    # Detection parameters
-    inputs.enum(
-        "detection_type",
-        options=["detection", "dense_region_caption", "region_proposal", "open_vocabulary_detection"],
-        default=None,
-        required=False,
-        label="Detection type",
-        description="Type of detection to perform",
+        description="Type of task to perform with Qwen2.5-VL model",
         view=types.AutocompleteView()
     )
     
     inputs.str(
-        "text_prompt",
+        "system_prompt",
         default=None,
         required=False,
-        label="Text prompt",
-        description="Optional prompt for guiding detection (Florence2 only supports one class prompt)",
-        view=types.AutocompleteView()
-    )
-    
-    # Phrase grounding parameters
-    inputs.str(
-        "caption",
-        default=None,
-        required=False,
-        label="Caption",
-        description="Caption text to ground in the image",
+        label="System Prompt",
+        description="Optional custom system prompt",
         view=types.AutocompleteView()
     )
     
     inputs.str(
-        "caption_field",
+        "prompt",
         default=None,
         required=False,
-        label="Caption field",
-        description="Name of the sample field containing caption to ground",
-        view=types.AutocompleteView()
-    )
-    
-    # Segmentation parameters
-    inputs.str(
-        "expression",
-        default=None,
-        required=False,
-        label="Expression",
-        description="Natural language expression describing the object to segment",
-        view=types.AutocompleteView()
-    )
-    
-    inputs.str(
-        "expression_field",
-        default=None,
-        required=False,
-        label="Expression field",
-        description="Name of the sample field containing the expression",
+        label="Prompt",
+        description="Prompt for guiding operation",
         view=types.AutocompleteView()
     )
     
