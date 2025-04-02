@@ -1,21 +1,22 @@
-from fiftyone import Model, SamplesMixin
-import torch
-from PIL import Image
+import os
 import logging
 import json
-import fiftyone as fo
-import os
-from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
+from PIL import Image
 from typing import Dict, Any, List, Union, Optional
+
 import numpy as np
+import torch
+
+import fiftyone as fo
+from fiftyone import Model, SamplesMixin
+
+from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
+
+
+
 logger = logging.getLogger(__name__)
 
-def get_device():
-    if torch.cuda.is_available():
-        return "cuda"
-    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
-        return "mps"
-    return "cpu"
+
 
 
 DEFAULT_DETECTION_SYSTEM_PROMPT = "The assistant specializes in accurate object detection and object counting. Report all detections as bounding boxes in COCO detection format."
@@ -33,6 +34,13 @@ QWEN_OPERATIONS = {
     "vqa": DEFAULT_VQA_SYSTEM_PROMPT
 }
 
+def get_device():
+    if torch.cuda.is_available():
+        return "cuda"
+    elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+        return "mps"
+    return "cpu"
+
 class QwenModel(Model, SamplesMixin):
     """A FiftyOne model for running Qwen-VL vision tasks"""
 
@@ -47,15 +55,10 @@ class QwenModel(Model, SamplesMixin):
         if operation not in QWEN_OPERATIONS:
             raise ValueError(f"Invalid operation: {operation}. Must be one of {list(QWEN_OPERATIONS.keys())}")
         
-        # for using sample from a dataset
         self.needs_fields = {}
-
         self.model_path = model_path
-        
-        # operation is a required parameter
-        self.operation = operation
-        # Use provided system prompt if given, otherwise use default
-        self.system_prompt = system_prompt if system_prompt is not None else QWEN_OPERATIONS[operation]
+        self._custom_system_prompt = system_prompt  # Store custom system prompt if provided
+        self._operation = operation
         self.prompt = prompt
         
         self.device = get_device()
@@ -92,6 +95,25 @@ class QwenModel(Model, SamplesMixin):
     @property
     def media_type(self):
         return "image"
+    
+    @property
+    def operation(self):
+        return self._operation
+
+    @operation.setter
+    def operation(self, value):
+        if value not in QWEN_OPERATIONS:
+            raise ValueError(f"Invalid operation: {value}. Must be one of {list(QWEN_OPERATIONS.keys())}")
+        self._operation = value
+
+    @property
+    def system_prompt(self):
+        # Return custom system prompt if set, otherwise return default for current operation
+        return self._custom_system_prompt if self._custom_system_prompt is not None else QWEN_OPERATIONS[self.operation]
+
+    @system_prompt.setter
+    def system_prompt(self, value):
+        self._custom_system_prompt = value
 
     def _parse_json(self, s: str) -> Optional[Dict]:
         """Parse JSON from model output.
