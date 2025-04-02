@@ -18,10 +18,9 @@ def download_model(model_name, model_path):
         model_path: the absolute filename or directory to which to download the
             model, as declared by the ``base_filename`` field of the manifest
     """
-    if not os.path.join(model_path, model_name):
-        snapshot_download(repo_id=model_name, local_dir=model_path)
-    else:
-        print(f"Model already downloaded to {model_path}")
+    
+    snapshot_download(repo_id=model_name, local_dir=model_path)
+
 
 def load_model(model_name, model_path, **kwargs):
     """Loads the model.
