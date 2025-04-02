@@ -20,9 +20,9 @@ def get_device():
 
 DEFAULT_DETECTION_SYSTEM_PROMPT = "The assistant specializes in accurate object detection and object counting. Report all detections as bounding boxes in COCO detection format."
 
-DEFAULT_KEYPOINT_SYSTEM_PROMPT = """The assistant specializes in accurate keypoint detection and object name/description recognition. Return a JSON array where each point has format: {"point_2d": [x, y], "label": "object name/description"}"""
+DEFAULT_KEYPOINT_SYSTEM_PROMPT = """The assistant specializes in accurate keypoint detection and object name/description recognition. Report all keypoints JSON array where each point has format: {"point_2d": [x, y], "label": "object name/description"}"""
 
-DEFAULT_CLASSIFICATION_SYSTEM_PROMPT = """The assistant Return a JSON array of predictions in the format: [{label: class_name]"""
+DEFAULT_CLASSIFICATION_SYSTEM_PROMPT = """The assistant specializes in classifying images based on the User's requirements. Unless User requests only one class, an image can have many classifications.  Report all classifications as JSON array of predictions in the format: [{label: class_name]"""
 
 DEFAULT_VQA_SYSTEM_PROMPT = "You are an expert at answering questions about images. Provide clear and concise answers."
 
