@@ -18,7 +18,6 @@ def get_device():
     return "cpu"
 
 
-
 DETECTION_SYSTEM_PROMPT = "You are an expert at detecting objects in images. Provide bounding boxes in COCO detection format."
 
 KEYPOINT_SYSTEM_PROMPT = """You are an expert at identifying point locations in images. Return a JSON array where each point has format: {"point_2d": [x, y], "label": "object name/description"}"""
@@ -279,11 +278,10 @@ class QwenModel(Model, SamplesMixin):
         if self.prompt is None:
             raise ValueError("A prompt must be provided before prediction")
 
-        # Construct chat message format expected by the model
         messages = [
             {"role": "system", "content": self.system_prompt},
             {
-                "role": "user", 
+                "role": "user",
                 "content": [
                     {"type": "text", "text": self.prompt},
                     {"image": sample.filepath if sample else None}
@@ -291,30 +289,26 @@ class QwenModel(Model, SamplesMixin):
             }
         ]
 
-        # Process text and image inputs through the model's processor
         text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         inputs = self.processor(text=[text], images=[image], padding=True, return_tensors="pt").to(self.device)
         
-        # Generate model outputs and decode to text
         output_ids = self.model.generate(**inputs, max_new_tokens=4096)
-        # Extract only the newly generated tokens, excluding input tokens
         generated_ids = [output_ids[len(input_ids):] for input_ids, output_ids in zip(inputs.input_ids, output_ids)]
         output_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=True)[0]
 
-        # Calculate actual image dimensions from the processor's grid size
-        input_height = inputs['image_grid_thw'][0][1]*14  # Grid height * patch size
-        input_width = inputs['image_grid_thw'][0][2]*14   # Grid width * patch size
+        # Get image dimensions and convert to float
+        input_height = float(inputs['image_grid_thw'][0][1].cpu() * 14)
+        input_width = float(inputs['image_grid_thw'][0][2].cpu() * 14)
 
-        # For VQA tasks, return the raw text response
+        # For VQA, return the raw text output
         if self.operation == "vqa":
             return output_text.strip()
 
-        # For other operations, parse output as JSON and validate
+        # For other operations, parse JSON and convert to appropriate format
         parsed_output = self._parse_json(output_text)
         if not parsed_output:
             return None
 
-        # Convert parsed output to appropriate FiftyOne format based on operation
         if self.operation == "detect":
             return self._to_detections(parsed_output, input_width, input_height)
         elif self.operation == "point":
