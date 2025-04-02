@@ -18,19 +18,19 @@ def get_device():
     return "cpu"
 
 
-DETECTION_SYSTEM_PROMPT = "You are an expert at detecting objects in images. Provide bounding boxes in COCO detection format."
+DEFAULT_DETECTION_SYSTEM_PROMPT = "The assistant specializes in accurate object detection and object counting. Report all detections as bounding boxes in COCO detection format."
 
-KEYPOINT_SYSTEM_PROMPT = """You are an expert at identifying point locations in images. Return a JSON array where each point has format: {"point_2d": [x, y], "label": "object name/description"}"""
+DEFAULT_KEYPOINT_SYSTEM_PROMPT = """The assistant specializes in accurate keypoint detection and object name/description recognition. Return a JSON array where each point has format: {"point_2d": [x, y], "label": "object name/description"}"""
 
-CLASSIFICATION_SYSTEM_PROMPT = """You are an expert at classifying images. Return a JSON array of predictions in the format: [{label: class_name]"""
+DEFAULT_CLASSIFICATION_SYSTEM_PROMPT = """The assistant Return a JSON array of predictions in the format: [{label: class_name]"""
 
-VQA_SYSTEM_PROMPT = "You are an expert at answering questions about images. Provide clear and concise answers."
+DEFAULT_VQA_SYSTEM_PROMPT = "You are an expert at answering questions about images. Provide clear and concise answers."
 
-SYSTEM_PROMPTS = {
-    "detect": DETECTION_SYSTEM_PROMPT,
-    "point": KEYPOINT_SYSTEM_PROMPT,
-    "classify": CLASSIFICATION_SYSTEM_PROMPT,
-    "vqa": VQA_SYSTEM_PROMPT
+QWEN_OPERATIONS = {
+    "detect": DEFAULT_DETECTION_SYSTEM_PROMPT,
+    "point": DEFAULT_KEYPOINT_SYSTEM_PROMPT,
+    "classify": DEFAULT_CLASSIFICATION_SYSTEM_PROMPT,
+    "vqa": DEFAULT_VQA_SYSTEM_PROMPT
 }
 
 class QwenModel(Model, SamplesMixin):
@@ -39,18 +39,23 @@ class QwenModel(Model, SamplesMixin):
     def __init__(
         self,
         model_path: str,
-        operation: str = "detect",
+        operation: str = None,
         prompt: str = None,
+        system_prompt: str = None,
         **kwargs
     ):
-        if operation not in SYSTEM_PROMPTS:
-            raise ValueError(f"Invalid operation: {operation}. Must be one of {list(SYSTEM_PROMPTS.keys())}")
+        if operation not in QWEN_OPERATIONS:
+            raise ValueError(f"Invalid operation: {operation}. Must be one of {list(QWEN_OPERATIONS.keys())}")
         
+        # for using sample from a dataset
         self.needs_fields = {}
 
         self.model_path = model_path
+        
+        # operation is a required parameter
         self.operation = operation
-        self.system_prompt = SYSTEM_PROMPTS[operation]
+        # Use provided system prompt if given, otherwise use default
+        self.system_prompt = system_prompt if system_prompt is not None else QWEN_OPERATIONS[operation]
         self.prompt = prompt
         
         self.device = get_device()
@@ -60,13 +65,22 @@ class QwenModel(Model, SamplesMixin):
         self.torch_dtype = torch.bfloat16 if self.device == "cuda" else None
         # Load model and processor
         logger.info(f"Loading model from {model_path}")
-        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-            model_path,
-            trust_remote_code=True,
-            local_files_only=True,
-            device_map=self.device,
-            torch_dtype=self.torch_dtype
-        )
+
+        if self.torch_dtype:
+            self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                model_path,
+                trust_remote_code=True,
+                # local_files_only=True,
+                device_map=self.device,
+                torch_dtype=self.torch_dtype
+            )
+        else:
+            self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+                model_path,
+                trust_remote_code=True,
+                # local_files_only=True,
+                device_map=self.device,
+            )
         
         logger.info("Loading processor")
         self.processor = AutoProcessor.from_pretrained(
