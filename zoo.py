@@ -1,3 +1,4 @@
+
 import os
 import logging
 import json
@@ -12,20 +13,112 @@ from fiftyone import Model, SamplesMixin
 
 from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
 
-
-
 logger = logging.getLogger(__name__)
 
+DEFAULT_DETECTION_SYSTEM_PROMPT = """You are a helpful assistant. Your tasks include detection and localization of any meaningful visual elements. Please detect both primary elements and their associated components when relevant to the instruction.  
+
+You can identify and locate objects, components, and patterns in images, including:
+
+1. Physical World objects:
+   - Complete objects and entities
+   - Component parts and accessories
+   - Environmental features and structures
+   - Natural and artificial objects
+   - Main elements (people, vehicles, furniture)
+   - Components (parts, accessories, details)
+   - Contextual elements (environment, background)
+
+2. Digital Interface objects:
+   - UI objects (buttons, menus, widgets)
+   - Interactive objects
+   - Layout sections and containers
+   - Design patterns and components
+
+3. You can read and detect text objects:
+   - Physical text (signs, documents, labels)
+   - Digital text (UI text, captions)
+   - Embedded text and codes
+   - Typography and fonts
+   - Visual assets (icons, graphics)
+   - Mixed-format text (overlays, watermarks)
+   - You detect text in any size, orientation, or language
+
+User will provide instuctios in either:
+- User instructions
+- List of objects to detect
+
+Report all bbox coordinates in COCO format."""
+
+DEFAULT_KEYPOINT_SYSTEM_PROMPT = """You are a helpful assistant. You specialize in key point detection across any visual domain. A key point represents the center of any meaningful visual element. 
+
+Key points should adapt to the context (physical world, digital interfaces, artwork, etc.) while maintaining consistent accuracy and relevance. Examples of key points include:
+
+1. Physical Objects key points:
+   - Human elements (facial points, body points, distinguishing points)
+   - Vehicle points (structural points, damage points)
+   - Environmental points (furniture, infrastructure, landmarks)
+
+2. Digital Interface key points:
+   - Buttons and controls
+   - Menu items and navigation points
+   - Text fields and input boxes
+   - Icons and symbols
+   - Interactive points
+
+3. Visual Design key points:
+   - Layout markers and alignment points
+   - Key visual points in designs/artwork
+   - Logo points and branding features
+   - Important text or label positions
+
+4. Scene key points:
+   - Foreground focal points
+   - Background reference points
+   - Spatial relationship markers
+   - Points of interest at any depth or scale
+
+For each key point:
+1. Identify the key point and provide a contextually appropriate label
+2. Locate the center of the key point 
+
+Report all key points in JSON array format where each point has: {"point_2d": [x, y], "label": "element name/description"} """
+
+DEFAULT_CLASSIFICATION_SYSTEM_PROMPT = """You are a helpful assistant. You specializes in comprehensive classification across any visual domain, capable of analyzing:
+
+1. Content Analysis:
+   - Primary elements and their significance
+   - Relationships and hierarchies between elements
+   - Spatial organization and layout patterns
+   - Context and environment (physical or digital)
+   - Domain-specific categorizations
+
+2. Technical Assessment:
+   - Quality metrics (clarity, fidelity, resolution)
+   - Visual attributes (contrast, brightness, color schemes)
+   - Style characteristics (design patterns, artistic elements)
+   - Format and medium-specific features
+   - Accessibility considerations
+
+3. Semantic Understanding:
+   - Purpose and function classification
+   - User interface patterns (for digital content)
+   - Physical world patterns (for real-world scenes)
+   - Cultural and contextual significance
+   - Temporal aspects (historical, modern, futuristic)
+
+4. Analytical Capabilities:
+   - Zero-shot classification from provided class lists
+   - Multi-label and hierarchical classification
+   - Domain-adaptive categorization
+   - Context-aware attribute recognition
+   - Cross-domain pattern matching
+
+Unless specifically requested for single-class output, multiple relevant classifications can be provided.
+
+Report all classifications as JSON array of predictions in the format: [{"label": "class_name"}]."""
 
 
-
-DEFAULT_DETECTION_SYSTEM_PROMPT = "The assistant specializes in accurate object detection and object counting. Report all detections as bounding boxes in COCO detection format."
-
-DEFAULT_KEYPOINT_SYSTEM_PROMPT = """The assistant specializes in accurate keypoint detection and object name/description recognition. Report all keypoints JSON array where each point has format: {"point_2d": [x, y], "label": "object name/description"}"""
-
-DEFAULT_CLASSIFICATION_SYSTEM_PROMPT = """The assistant specializes in classifying images based on the User's requirements. Unless User requests only one class, an image can have many classifications.  Report all classifications as JSON array of predictions in the format: [{label: class_name]"""
-
-DEFAULT_VQA_SYSTEM_PROMPT = "You are an expert at answering questions about images. Provide clear and concise answers. Report results in natural language text in English."
+DEFAULT_VQA_SYSTEM_PROMPT = "You are a helpful assistant. You provide clear and concise answerss to questions about images. Report answers in natural language text in English."
 
 QWEN_OPERATIONS = {
     "detect": DEFAULT_DETECTION_SYSTEM_PROMPT,
@@ -41,7 +134,7 @@ def get_device():
         return "mps"
     return "cpu"
 
-class QwenModel(Model, SamplesMixin):
+class QwenModel(SamplesMixin, Model):
     """A FiftyOne model for running Qwen-VL vision tasks"""
 
     def __init__(
@@ -55,7 +148,8 @@ class QwenModel(Model, SamplesMixin):
         if operation not in QWEN_OPERATIONS:
             raise ValueError(f"Invalid operation: {operation}. Must be one of {list(QWEN_OPERATIONS.keys())}")
         
-        self.needs_fields = {}
+        self._fields = {}
+        
         self.model_path = model_path
         self._custom_system_prompt = system_prompt  # Store custom system prompt if provided
         self._operation = operation
@@ -89,8 +183,17 @@ class QwenModel(Model, SamplesMixin):
         self.processor = AutoProcessor.from_pretrained(
             model_path,
             trust_remote_code=True,
-            local_files_only=True
+            local_files_only=True,
+            use_fast=True
         )
+
+    def _get_field(self):
+        if "prompt_field" in self.needs_fields:
+            prompt_field = self.needs_fields["prompt_field"]
+        else:
+            prompt_field = next(iter(self.needs_fields.values()), None)
+
+        return prompt_field
 
     @property
     def media_type(self):
@@ -311,8 +414,10 @@ class QwenModel(Model, SamplesMixin):
         Raises:
             ValueError: If no prompt has been set
         """
-        if self.prompt is None:
-            raise ValueError("A prompt must be provided before prediction")
+        if sample is not None and self._get_field() is not None:
+            field_value = sample.get_field(self._get_field())
+            if field_value is not None:
+                self.prompt = str(field_value)
 
         messages = [
             {"role": "system", "content": self.system_prompt},
@@ -328,7 +433,7 @@ class QwenModel(Model, SamplesMixin):
         text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         inputs = self.processor(text=[text], images=[image], padding=True, return_tensors="pt").to(self.device)
         
-        output_ids = self.model.generate(**inputs, max_new_tokens=4096)
+        output_ids = self.model.generate(**inputs, max_new_tokens=8192)
         generated_ids = [output_ids[len(input_ids):] for input_ids, output_ids in zip(inputs.input_ids, output_ids)]
         output_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=True)[0]
 
