@@ -1,6 +1,6 @@
 {
     "name": "Qwen2.5-VL",
-    "url": "https://github.com/harpreetsahota204/qwen2.5-vl",
+    "url": "https://github.com/harpreetsahota204/qwen2_5_vl",
     "models": [
         {
             "base_name": "Qwen/Qwen2.5-VL-3B-Instruct",
