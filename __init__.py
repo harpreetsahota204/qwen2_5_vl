@@ -20,6 +20,8 @@ def download_model(model_name, model_path):
     """
     if not model_path:
         snapshot_download(repo_id=model_name, local_dir=model_path)
+    else:
+        print(f"Model already downloaded to {model_path}")
 
 def load_model(model_name, model_path, **kwargs):
     """Loads the model.
