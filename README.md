@@ -5,13 +5,48 @@ Implementing Qwen2.5-VL as a Remote Zoo Model for FiftyOne
 
 ## Features
 
-The model supports multiple vision-language operations:
-- Visual Question Answering (VQA)
-- Object Detection
-- OCR with Detection
-- Keypoint Detection (Pointing)
-- Image Classification
-- Grounded Detection and Pointing
+Based on the documentation, here's a comprehensive primer on the tasks supported by Qwen2.5-VL:
+
+# Qwen2.5-VL Supported Tasks
+
+1. **Visual Question Answering (VQA)**
+   - Answers natural language questions about images
+   - Returns text responses in English
+   - Can be used for general image understanding and description
+
+2. **Object Detection**
+   - Locates and identifies objects in images
+   - Returns normalized bounding box coordinates and object labels
+   - Can be prompted to find specific types of objects
+
+3. **Optical Character Recognition (OCR)**
+   - Reads and extracts text from images
+   - Particularly useful for documents, signs, and text-containing images
+
+4. **Keypoint Detection**
+   - Identifies specific points of interest in images
+   - Returns normalized point coordinates with labels
+   - Useful for pose estimation and landmark detection
+
+5. **Image Classification**
+   - Categorizes images into predefined classes
+   - Can identify image quality issues
+   - Returns classification labels
+
+## Advanced Grounded Operations
+
+The model also supports two sophisticated grounded operations that build upon VQA results:
+
+1. **Grounded Detection**
+   - Links textual descriptions with specific object locations
+   - Returns detection boxes grounded in the VQA response
+
+2. **Grounded Pointing**
+   - Associates text descriptions with specific points in the image
+   - Returns keypoints grounded in the VQA response
+
+The model is highly flexible, allowing you to switch between these tasks by simply changing the operation mode and prompt, making it a versatile tool for various computer vision and multimodal applications.
+
 
 ## Technical Details
 
@@ -38,37 +73,68 @@ foz.download_zoo_model(
 
 ## Usage Examples
 
-### Visual Question Answering
+## Loading the model
+
 ```python
 model = foz.load_zoo_model(
     "Qwen/Qwen2.5-VL-3B-Instruct",
-    operation="vqa",
-    prompt="List all objects in this image seperated by commas"
+    # install_requirements=True #if you are using for the first time and need to download reuirement,
+    # ensure_requirements=True #  ensure any requirements are installed before loading the model
 )
-dataset.apply_model(model, label_field="q_vqa")
 ```
 
-### Object Detection
+#### Available Checkpoints
+
+These checkpoints come in different sizes (3B, 7B, 32B, and 72B parameters) and each size has two variants:
+
+- Regular version (with `-Instruct` suffix)
+- AWQ quantized version (with `-Instruct-AWQ` suffix)
+
+1. `Qwen/Qwen2.5-VL-3B-Instruct`
+2. `Qwen/Qwen2.5-VL-3B-Instruct-AWQ`
+3. `Qwen/Qwen2.5-VL-7B-Instruct`
+4. `Qwen/Qwen2.5-VL-7B-Instruct-AWQ`
+5. `Qwen/Qwen2.5-VL-32B-Instruct`
+6. `Qwen/Qwen2.5-VL-32B-Instruct-AWQ`
+7. `Qwen/Qwen2.5-VL-72B-Instruct`
+8. `Qwen/Qwen2.5-VL-72B-Instruct-AWQ`
+
+The AWQ versions require an additional package `autoawq==0.2.7.post3` but offer a more memory-efficient alternative to the regular versions while maintaining performance.
+
+## Switching Between Operations
+
+The same model instance can be used for different operations by simply changing its properties:
+
+#### Visual Question Answering
+```python
+
+model.operation="vqa"
+model.prompt="List all objects in this image seperated by commas
+
+dataset.apply_model(model, label_field="q_vqa")
+```
+#### Object Detection
 ```python
 model.operation = "detect"
 model.prompt = "Locate the objects in this image."
 dataset.apply_model(model, label_field="qdets")
 ```
 
-### OCR with Detection
+#### OCR with Detection
 ```python
 model.prompt = "Read all the text in the image."
 dataset.apply_model(model, label_field="q_ocr")
 ```
 
-### Keypoint Detection
+#### Keypoint Detection
 ```python
 model.operation = "point"
 model.prompt = "Detect the keypoints in the image."
 dataset.apply_model(model, label_field="qpts")
 ```
 
-### Image Classification
+#### Image Classification
+
 ```python
 model.operation = "classify"
 model.prompt = "List the potential image quality issues in this image."
