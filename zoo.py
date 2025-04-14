@@ -145,9 +145,6 @@ class QwenModel(SamplesMixin, Model):
         system_prompt: str = None,
         **kwargs
     ):
-        if operation not in QWEN_OPERATIONS:
-            raise ValueError(f"Invalid operation: {operation}. Must be one of {list(QWEN_OPERATIONS.keys())}")
-        
         self._fields = {}
         
         self.model_path = model_path
@@ -186,6 +183,8 @@ class QwenModel(SamplesMixin, Model):
             local_files_only=True,
             use_fast=True
         )
+
+        self.model.eval()
 
     def _get_field(self):
         if "prompt_field" in self.needs_fields:
@@ -297,11 +296,14 @@ class QwenModel(SamplesMixin, Model):
                 h = (y2 - y1) / image_height # Normalized height
                 
                 # Create Detection object with normalized coordinates
-                detection = fo.Detection(
-                    label=str(box.get("label", "object")),
-                    bounding_box=[x, y, w, h],
-                )
-                detections.append(detection)
+                try:
+                    detection = fo.Detection(
+                        label=str(box.get("label", "object")),
+                        bounding_box=[x, y, w, h],
+                    )
+                    detections.append(detection)
+                except:
+                    continue
                 
             except Exception as e:
                 # Log any errors processing individual boxes but continue
@@ -433,7 +435,8 @@ class QwenModel(SamplesMixin, Model):
         text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
         inputs = self.processor(text=[text], images=[image], padding=True, return_tensors="pt").to(self.device)
         
-        output_ids = self.model.generate(**inputs, max_new_tokens=8192)
+        with torch.no_grad():
+            output_ids = self.model.generate(**inputs, max_new_tokens=8192)
         generated_ids = [output_ids[len(input_ids):] for input_ids, output_ids in zip(inputs.input_ids, output_ids)]
         output_text = self.processor.batch_decode(generated_ids, skip_special_tokens=True, clean_up_tokenization_spaces=True)[0]
 
