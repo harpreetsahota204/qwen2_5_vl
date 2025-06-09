@@ -45,9 +45,9 @@ You can identify and locate objects, components, and patterns in images, includi
 
 User will provide instuctios in either:
 - User instructions
-- List of objects to detect
+- Comma separated list of objects to detect
 
-Report all bbox coordinates in COCO format."""
+Report requested bbox coordinates in COCO format for all objects."""
 
 DEFAULT_KEYPOINT_SYSTEM_PROMPT = """You are a helpful assistant. You specialize in key point detection across any visual domain. A key point represents the center of any meaningful visual element. 
 
@@ -81,7 +81,11 @@ For each key point:
 1. Identify the key point and provide a contextually appropriate label
 2. Locate the center of the key point 
 
-Report all key points in JSON array format where each point has: {"point_2d": [x, y], "label": "element name/description"} """
+User will provide instuctios in either:
+- User instructions
+- Comma separated list of key points to detect
+
+Report all requested key points in JSON array format where each point has: {"point_2d": [x, y], "label": "element name/description"} """
 
 DEFAULT_CLASSIFICATION_SYSTEM_PROMPT = """You are a helpful assistant. You specializes in comprehensive classification across any visual domain, capable of analyzing:
 
@@ -186,6 +190,15 @@ class QwenModel(SamplesMixin, Model):
 
         self.model.eval()
 
+    @property
+    def needs_fields(self):
+        """A dict mapping model-specific keys to sample field names."""
+        return self._fields
+
+    @needs_fields.setter
+    def needs_fields(self, fields):
+        self._fields = fields
+    
     def _get_field(self):
         if "prompt_field" in self.needs_fields:
             prompt_field = self.needs_fields["prompt_field"]
@@ -198,6 +211,7 @@ class QwenModel(SamplesMixin, Model):
     def media_type(self):
         return "image"
     
+
     @property
     def operation(self):
         return self._operation
@@ -447,17 +461,14 @@ class QwenModel(SamplesMixin, Model):
         # For VQA, return the raw text output
         if self.operation == "vqa":
             return output_text.strip()
-
-        # For other operations, parse JSON and convert to appropriate format
-        parsed_output = self._parse_json(output_text)
-        if not parsed_output:
-            return None
-
-        if self.operation == "detect":
+        elif self.operation == "detect":
+            parsed_output = self._parse_json(output_text)
             return self._to_detections(parsed_output, input_width, input_height)
         elif self.operation == "point":
+            parsed_output = self._parse_json(output_text)
             return self._to_keypoints(parsed_output, input_width, input_height)
-        elif self.operation == "classify":
+        elif self.operation == "classify" or self.operation == "ocr":
+            parsed_output = self._parse_json(output_text)
             return self._to_classifications(parsed_output)
 
     def predict(self, image, sample=None):
