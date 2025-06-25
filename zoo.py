@@ -13,6 +13,8 @@ from fiftyone import Model, SamplesMixin
 
 from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
 
+from qwen_vl_utils import process_vision_info
+
 logger = logging.getLogger(__name__)
 
 DEFAULT_DETECTION_SYSTEM_PROMPT = """You are a helpful assistant. Your tasks include detection and localization of any meaningful visual elements. Please detect both primary elements and their associated components when relevant to the instruction.  
@@ -430,24 +432,55 @@ class QwenModel(SamplesMixin, Model):
         Raises:
             ValueError: If no prompt has been set
         """
+        # Use local prompt variable instead of modifying self.prompt
+        prompt = self.prompt  # Start with instance default
+        
         if sample is not None and self._get_field() is not None:
             field_value = sample.get_field(self._get_field())
             if field_value is not None:
-                self.prompt = str(field_value)
-
+                prompt = str(field_value)  # Local variable, doesn't affect instance
+        
+        if not prompt:
+            raise ValueError("No prompt provided.")
+        
         messages = [
-            {"role": "system", "content": self.system_prompt},
             {
-                "role": "user",
+                "role": "system", 
+                "content": [  
+                    {
+                        "type": "text",
+                        "text": self.system_prompt
+                    }
+                ]
+            },
+            {
+                "role": "user", 
                 "content": [
-                    {"type": "text", "text": self.prompt},
-                    {"image": sample.filepath if sample else None}
+                    {
+                        "type": "image", 
+                        "image": sample.filepath if sample else image
+                    },
+                    {
+                        "type": "text", 
+                        "text": prompt
+                    },
                 ]
             }
         ]
+        text = self.processor.apply_chat_template(
+            messages, 
+            tokenize=False, 
+            add_generation_prompt=True
+            )
+        
+        image_inputs, video_inputs = process_vision_info(messages)
 
-        text = self.processor.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-        inputs = self.processor(text=[text], images=[image], padding=True, return_tensors="pt").to(self.device)
+        inputs = self.processor(
+            text=[text], 
+            images=image_inputs,
+            videos=video_inputs,
+            padding=True, 
+            return_tensors="pt").to(self.device)
         
         with torch.no_grad():
             output_ids = self.model.generate(**inputs, max_new_tokens=8192)
