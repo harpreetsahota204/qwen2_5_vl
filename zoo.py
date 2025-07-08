@@ -164,12 +164,12 @@ class QwenModel(SamplesMixin, Model):
         logger.info(f"Using device: {self.device}")
 
         model_kwargs = {
-            "device_map": self._device,
+            "device_map": self.device,
         }
 
         # Set optimizations based on CUDA device capabilities
         if self.device == "cuda" and torch.cuda.is_available():
-            capability = torch.cuda.get_device_capability(self._device)
+            capability = torch.cuda.get_device_capability(self.device)
             
             # Enable flash attention if available
             if is_flash_attn_2_available():
@@ -178,7 +178,7 @@ class QwenModel(SamplesMixin, Model):
             # Enable bfloat16 on Ampere+ GPUs (compute capability 8.0+)
             if capability[0] >= 8:
                 model_kwargs["torch_dtype"] = torch.bfloat16
-                
+
         # Load model and processor
         logger.info(f"Loading model from {model_path}")
 
