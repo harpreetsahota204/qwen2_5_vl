@@ -13,6 +13,8 @@ from fiftyone import Model, SamplesMixin
 
 from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor
 
+from transformers.utils.import_utils import is_flash_attn_2_available
+
 from qwen_vl_utils import process_vision_info
 
 logger = logging.getLogger(__name__)
@@ -161,36 +163,41 @@ class QwenModel(SamplesMixin, Model):
         self.device = get_device()
         logger.info(f"Using device: {self.device}")
 
-        # Set dtype for CUDA devices
-        self.torch_dtype = torch.bfloat16 if self.device == "cuda" else None
+        model_kwargs = {
+            "device_map": self._device,
+        }
+
+        # Set optimizations based on CUDA device capabilities
+        if self.device == "cuda" and torch.cuda.is_available():
+            capability = torch.cuda.get_device_capability(self._device)
+            
+            # Enable flash attention if available
+            if is_flash_attn_2_available():
+                model_kwargs["attn_implementation"] = "flash_attention_2"
+            
+            # Enable bfloat16 on Ampere+ GPUs (compute capability 8.0+)
+            if capability[0] >= 8:
+                model_kwargs["torch_dtype"] = torch.bfloat16
+                
         # Load model and processor
         logger.info(f"Loading model from {model_path}")
 
-        if self.torch_dtype:
-            self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-                model_path,
-                trust_remote_code=True,
-                # local_files_only=True,
-                device_map=self.device,
-                torch_dtype=self.torch_dtype
-            )
-        else:
-            self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
-                model_path,
-                trust_remote_code=True,
-                # local_files_only=True,
-                device_map=self.device,
-            )
+        self.model = Qwen2_5_VLForConditionalGeneration.from_pretrained(
+            model_path,
+            trust_remote_code=True,
+            **model_kwargs
+        )
+        
+        self.model.eval()
         
         logger.info("Loading processor")
         self.processor = AutoProcessor.from_pretrained(
             model_path,
             trust_remote_code=True,
-            local_files_only=True,
             use_fast=True
         )
 
-        self.model.eval()
+        
 
     @property
     def needs_fields(self):
